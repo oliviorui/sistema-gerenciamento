@@ -1,0 +1,9 @@
+/uploads/entregas/*
+!/uploads/entregas/index.php
+
+/config/conexao.php
+
+/vendor/
+node_modules/
+
+/test
