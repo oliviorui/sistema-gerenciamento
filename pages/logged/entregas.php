@@ -67,7 +67,7 @@ if ($stmt) {
         <nav class="nav">
             <a href="dashboard.php">Página Inicial</a>
             <a href="entregas.php">Entregas</a>
-            <a href="logs.php">Logs</a>
+            <a href="logs.php">Atividades no sistema</a>
         </nav>
 
         <div class="divider"></div>

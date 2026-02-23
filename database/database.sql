@@ -79,23 +79,6 @@ CREATE TABLE IF NOT EXISTS user_tokens (
         ON DELETE CASCADE
 );
 
-
-
--- =========================
--- DISCIPLINAS PADRÃO
--- =========================
-INSERT INTO disciplinas (nome, codigo, descricao) VALUES
-('Algoritmos e Estruturas de Dados', 'AED01', 'Estudo de algoritmos, estruturas de dados e complexidade computacional.'),
-('Base de Dados', 'BD02', 'Modelagem, normalização e implementação de bancos de dados relacionais.'),
-('Programação Orientada a Objetos', 'POO03', 'Conceitos de programação orientada a objetos usando linguagens como Java e Python.'),
-('Redes de Computadores', 'RC04', 'Fundamentos de redes, protocolos, segurança e administração de redes.'),
-('Engenharia de Software', 'ES05', 'Processos de desenvolvimento de software, metodologias ágeis e boas práticas.'),
-('Sistemas Operacionais', 'SO06', 'Princípios de sistemas operacionais, gerenciamento de memória, processos e arquivos.'),
-('Desenvolvimento Web', 'DW07', 'Criação de aplicações web usando HTML, CSS, JavaScript e frameworks.'),
-('Segurança da Informação', 'SI08', 'Conceitos de segurança, criptografia, ataques cibernéticos e proteção de dados.'),
-('Ética e Legislação em TI', 'EL13', 'Aspectos éticos e legais relacionados ao uso da tecnologia da informação.'),
-('Gestão de Projetos de TI', 'GP14', 'Metodologias para planejamento, execução e monitoramento de projetos de tecnologia.');
-
 CREATE TABLE IF NOT EXISTS atividades (
     id_atividade INT AUTO_INCREMENT PRIMARY KEY,
     id_disciplina INT NOT NULL,
@@ -147,6 +130,21 @@ CREATE TABLE IF NOT EXISTS entregas (
 );
 
 -- =========================
+-- DISCIPLINAS PADRÃO
+-- =========================
+INSERT INTO disciplinas (nome, codigo, descricao) VALUES
+('Algoritmos e Estruturas de Dados', 'AED01', 'Estudo de algoritmos, estruturas de dados e complexidade computacional.'),
+('Base de Dados', 'BD02', 'Modelagem, normalização e implementação de bancos de dados relacionais.'),
+('Programação Orientada a Objetos', 'POO03', 'Conceitos de programação orientada a objetos usando linguagens como Java e Python.'),
+('Redes de Computadores', 'RC04', 'Fundamentos de redes, protocolos, segurança e administração de redes.'),
+('Engenharia de Software', 'ES05', 'Processos de desenvolvimento de software, metodologias ágeis e boas práticas.'),
+('Sistemas Operacionais', 'SO06', 'Princípios de sistemas operacionais, gerenciamento de memória, processos e arquivos.'),
+('Desenvolvimento Web', 'DW07', 'Criação de aplicações web usando HTML, CSS, JavaScript e frameworks.'),
+('Segurança da Informação', 'SI08', 'Conceitos de segurança, criptografia, ataques cibernéticos e proteção de dados.'),
+('Ética e Legislação em TI', 'EL13', 'Aspectos éticos e legais relacionados ao uso da tecnologia da informação.'),
+('Gestão de Projetos de TI', 'GP14', 'Metodologias para planejamento, execução e monitoramento de projetos de tecnologia.');
+
+-- =========================
 -- USUÁRIO ADMIN PADRÃO
 -- senha: Admin123  (já criptografada)
 -- =========================
@@ -159,4 +157,4 @@ INSERT INTO usuarios (nome, email, senha, tipo) VALUES
 -- hash pronto (pode gerar outro se quiser)
 -- =========================
 INSERT INTO usuarios (nome, email, senha, tipo) VALUES
-('Funcionário', 'funcionario@sistema.com', '$2y$10$Sxn1Iiavnf4atykiAJrks.8UXXFSBrehmPA1PRpEPuJTOdi.FaaZa', 'funcionario');
+('Carlos Professor', 'funcionario@sistema.com', '$2y$10$Sxn1Iiavnf4atykiAJrks.8UXXFSBrehmPA1PRpEPuJTOdi.FaaZa', 'funcionario');

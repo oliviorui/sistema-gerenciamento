@@ -49,7 +49,7 @@ $res = mysqli_query($conn, $sql);
             <a href="dashboard_funcionario.php">Painel Funcionário</a>
             <a href="atividades.php">Atividades</a>
             <a href="entregas.php">Entregas</a>
-            <a href="../logged/logs.php">Logs</a>
+            <a href="logs.php">Logs</a>
             <?php if (($_SESSION['usuario_tipo'] ?? '') === 'admin'): ?>
                 <a href="../admin/dashboard_admin.php">Admin</a>
             <?php endif; ?>

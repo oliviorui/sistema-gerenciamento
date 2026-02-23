@@ -44,7 +44,9 @@ if ($stmtEst) {
         </div>
 
         <nav class="nav">
-            <a href="dashboard_funcionario.php">Página Inicial</a>
+            <a href="dashboard_funcionario.php">Painel Funcionário</a>
+            <a href="atividades.php">Atividades</a>
+            <a href="entregas.php">Entregas</a>
             <a href="../logged/logs.php">Logs</a>
             <?php if (($_SESSION['usuario_tipo'] ?? '') === 'admin'): ?>
                 <a href="../admin/dashboard_admin.php">Admin</a>
@@ -123,16 +125,6 @@ if ($stmtEst) {
 
                         <button class="btn btn-success" type="submit">Registar</button>
                     </form>
-                </div>
-            </div>
-
-            <div class="card">
-                <div class="card-body">
-                    <h3 style="margin:0 0 12px;">Atalho rápido</h3>
-                    <p class="muted" style="margin:0;">
-                        Aqui o funcionário lança notas para estudantes.  
-                        No próximo passo vamos adicionar <strong>Entregas</strong> (atividades + submissões).
-                    </p>
                 </div>
             </div>
         </section>

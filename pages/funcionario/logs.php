@@ -23,9 +23,10 @@ $usuario_nome = $_SESSION['usuario_nome'] ?? 'Usuário';
             </div>
 
             <nav class="nav">
-                <a href="dashboard.php">Página Inicial</a>
+                <a href="dashboard_funcionario.php">Painel Funcionário</a>
+                <a href="atividades.php">Atividades</a>
                 <a href="entregas.php">Entregas</a>
-                <a href="logs.php">Atividades no sistema</a>
+                <a href="/logs.php">Logs</a>
             </nav>
 
             <div class="divider"></div>

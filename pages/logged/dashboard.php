@@ -4,17 +4,6 @@ require_login($conn);
 
 $usuario_nome = $_SESSION['usuario_nome'] ?? 'Usuário';
 $tipo = (string)($_SESSION['usuario_tipo'] ?? 'estudante');
-
-// Disciplinas (para o gráfico e visualização)
-$query_disciplinas = "SELECT id_disciplina, nome FROM disciplinas";
-$result_disciplinas = mysqli_query($conn, $query_disciplinas);
-
-$disciplinas = [];
-if ($result_disciplinas) {
-    while ($row = mysqli_fetch_assoc($result_disciplinas)) {
-        $disciplinas[] = $row;
-    }
-}
 ?>
 
 <!DOCTYPE html>
@@ -85,6 +74,9 @@ if ($result_disciplinas) {
                         <p class="muted" style="margin:0;">
                             Apenas <strong>Funcionário</strong> ou <strong>Admin</strong> podem lançar notas.
                         </p>
+                        <p class="muted" style="margin:10px 0 0;">
+                            As tuas notas aparecem na tabela e no gráfico ao lado.
+                        </p>
                     <?php else: ?>
                         <p class="muted" style="margin:0;">
                             Vá ao <strong>Painel Funcionário</strong> para lançar notas para estudantes.
@@ -98,14 +90,180 @@ if ($result_disciplinas) {
 
             <div class="card">
                 <div class="card-body">
-                    <h3 style="margin: 0 0 12px;">Gráficos</h3>
-                    <canvas id="meuGrafico"></canvas>
+                    <h3 style="margin: 0 0 12px;">Gráfico (média por disciplina)</h3>
+                    <canvas id="meuGrafico" height="140"></canvas>
+                    <div id="graficoMsg" class="muted" style="margin-top:10px;"></div>
                 </div>
             </div>
         </section>
 
-        <div id="tabelaNotas"></div>
+        <div class="card" style="margin-top: 16px;">
+            <div class="card-body">
+                <h3 style="margin: 0 0 12px;">Minhas notas</h3>
+                <div id="tabelaNotas"></div>
+            </div>
+        </div>
     </main>
 </div>
+
+<script>
+    let chartRef = null;
+
+    function renderTabela(notas) {
+        const $wrap = $("#tabelaNotas");
+
+        if (!Array.isArray(notas) || notas.length === 0) {
+            $wrap.html('<p class="muted">Ainda não tens notas registradas.</p>');
+            return;
+        }
+
+        let html = `
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Disciplina</th>
+                        <th>Nota</th>
+                        <th>Tipo</th>
+                        <th>Data</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        notas.forEach(n => {
+            html += `
+                <tr>
+                    <td>${escapeHtml(n.disciplina || '')}</td>
+                    <td><strong>${escapeHtml(String(n.nota ?? ''))}</strong></td>
+                    <td>${escapeHtml(n.tipo_avaliacao || '')}</td>
+                    <td>${escapeHtml(n.data_avaliacao || '')}</td>
+                </tr>
+            `;
+        });
+
+        html += `</tbody></table>`;
+        $wrap.html(html);
+    }
+
+    function buildMediaPorDisciplina(notas) {
+        const map = {}; // disciplina -> {sum, count}
+        notas.forEach(n => {
+            const disc = (n.disciplina || 'Sem disciplina');
+            const val = parseFloat(n.nota);
+            if (!Number.isFinite(val)) return;
+
+            if (!map[disc]) map[disc] = {sum: 0, count: 0};
+            map[disc].sum += val;
+            map[disc].count += 1;
+        });
+
+        const labels = Object.keys(map);
+        const values = labels.map(l => {
+            const obj = map[l];
+            return obj.count ? (obj.sum / obj.count) : 0;
+        });
+
+        return {labels, values};
+    }
+
+    function renderGrafico(notas) {
+        const ctx = document.getElementById("meuGrafico");
+        const msg = document.getElementById("graficoMsg");
+
+        if (!ctx) return;
+
+        if (!Array.isArray(notas) || notas.length === 0) {
+            msg.textContent = "Sem dados para mostrar no gráfico.";
+            if (chartRef) {
+                chartRef.destroy();
+                chartRef = null;
+            }
+            return;
+        }
+
+        const {labels, values} = buildMediaPorDisciplina(notas);
+
+        if (labels.length === 0) {
+            msg.textContent = "Sem dados válidos para cálculo da média.";
+            if (chartRef) {
+                chartRef.destroy();
+                chartRef = null;
+            }
+            return;
+        }
+
+        msg.textContent = "";
+
+        if (chartRef) {
+            chartRef.destroy();
+            chartRef = null;
+        }
+
+        chartRef = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Média',
+                    data: values
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 20
+                    }
+                }
+            }
+        });
+    }
+
+    function carregarDados() {
+        const termo = $("#searchTerm").val() || '';
+
+        $.ajax({
+            url: '../../dados/get_dados.php',
+            method: 'GET',
+            dataType: 'json',
+            data: { search: termo },
+            success: function(resp) {
+                const notas = resp.notas || [];
+                renderTabela(notas);
+                renderGrafico(notas);
+            },
+            error: function(xhr) {
+                $("#tabelaNotas").html('<p class="muted">Erro ao carregar as notas.</p>');
+                $("#graficoMsg").text('Erro ao carregar o gráfico.');
+                if (chartRef) { chartRef.destroy(); chartRef = null; }
+            }
+        });
+    }
+
+    function escapeHtml(str) {
+        return String(str)
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
+    $(document).ready(function() {
+        carregarDados();
+
+        let t = null;
+        $("#searchTerm").on("input", function() {
+            clearTimeout(t);
+            t = setTimeout(carregarDados, 250);
+        });
+    });
+</script>
+
 </body>
 </html>
