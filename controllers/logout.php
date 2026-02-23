@@ -1,33 +1,45 @@
 <?php
-session_start();
-require_once '../config/conexao.php'; // Ajustei o caminho da conexão
+require_once '../config/bootstrap.php';
 
-if (isset($_SESSION['usuario_id'])) {
-    $id_usuario = $_SESSION['usuario_id'];
+start_secure_session();
 
-    // Registra o log de logout no sistema
+// Remove token do BD (se existir cookie)
+$cookieToken = $_COOKIE['remember_token'] ?? '';
+if (is_string($cookieToken) && $cookieToken !== '') {
+    $tokenHash = hash('sha256', $cookieToken);
+
+    $sqlDel = "DELETE FROM user_tokens WHERE token_hash = ?";
+    $stmt = $conn->prepare($sqlDel);
+    if ($stmt) {
+        $stmt->bind_param("s", $tokenHash);
+        $stmt->execute();
+        $stmt->close();
+    }
+}
+
+if (!empty($_SESSION['usuario_id'])) {
+    $id_usuario = (int)$_SESSION['usuario_id'];
+
     $data_hora = date('Y-m-d H:i:s');
     $descricao = 'Logout realizado';
-    $query_log = "INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade) 
-                  VALUES ($id_usuario, '$data_hora', '$descricao', 'Logout')";
-    mysqli_query($conn, $query_log);
+
+    $sqlLog = "INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade) VALUES (?, ?, ?, 'Logout')";
+    $stmtLog = $conn->prepare($sqlLog);
+    if ($stmtLog) {
+        $stmtLog->bind_param("iss", $id_usuario, $data_hora, $descricao);
+        $stmtLog->execute();
+        $stmtLog->close();
+    }
 }
 
-// Remove o cookie "user_id" definindo sua data de expiração no passado
-if (isset($_COOKIE['user_id'])) {
-    setcookie('user_id', '', time() - 3600, '/'); // Expira o cookie imediatamente
-}
+remember_cookie_clear();
 
-// Destroi a sessão
 session_unset();
 session_destroy();
 
-// Previne o navegador de armazenar a página em cache
 header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
 
-// Redireciona para a página de login
 header("Location: ../pages/auth/login.php");
 exit();
-?>

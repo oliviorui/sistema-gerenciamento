@@ -1,5 +1,4 @@
 <?php
-require_once '../../config/conexao.php';
 require_once 'protecao_admin.php';
 
 // Buscar disciplinas
@@ -32,7 +31,11 @@ $disciplinas = mysqli_query($conn, "
         </nav>
 
         <div class="divider"></div>
-        <a class="btn btn-danger logout" href="../../controllers/logout.php">Sair</a>
+
+        <form action="../../controllers/logout.php" method="POST">
+            <?= csrf_field(); ?>
+            <button class="btn btn-danger logout" type="submit">Sair</button>
+        </form>
     </aside>
 
     <header class="topbar">
@@ -46,19 +49,25 @@ $disciplinas = mysqli_query($conn, "
         <div class="card" style="margin-bottom: 16px;">
             <div class="card-body">
                 <h3 style="margin: 0 0 12px;">Adicionar disciplina</h3>
+
                 <form method="POST" action="../../controllers/adicionar_disciplina.php" class="grid-2">
+                    <?= csrf_field(); ?>
+
                     <div class="field">
                         <label>Nome</label>
                         <input type="text" name="nome" placeholder="Ex: Matemática" required>
                     </div>
+
                     <div class="field">
                         <label>Código</label>
                         <input type="text" name="codigo" placeholder="Ex: MAT101" required>
                     </div>
+
                     <div class="field" style="grid-column: 1 / -1;">
                         <label>Descrição</label>
                         <input type="text" name="descricao" placeholder="Opcional">
                     </div>
+
                     <div style="grid-column: 1 / -1;">
                         <button class="btn btn-success" type="submit">Adicionar</button>
                     </div>
@@ -78,15 +87,16 @@ $disciplinas = mysqli_query($conn, "
             <tbody>
                 <?php while ($d = mysqli_fetch_assoc($disciplinas)): ?>
                 <tr>
-                    <td><?= $d['nome']; ?></td>
-                    <td><?= $d['codigo']; ?></td>
-                    <td><?= $d['descricao']; ?></td>
+                    <td><?= htmlspecialchars((string)$d['nome'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?= htmlspecialchars((string)$d['codigo'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?= htmlspecialchars((string)$d['descricao'], ENT_QUOTES, 'UTF-8'); ?></td>
                     <td>
-                        <a class="btn btn-danger"
-                           href="../../controllers/excluir_disciplina.php?id=<?= $d['id_disciplina']; ?>"
-                           onclick="return confirm('Excluir disciplina?');">
-                           Excluir
-                        </a>
+                        <form action="../../controllers/excluir_disciplina.php" method="POST"
+                              onsubmit="return confirm('Excluir disciplina?');" style="display:inline;">
+                            <?= csrf_field(); ?>
+                            <input type="hidden" name="id" value="<?= (int)$d['id_disciplina']; ?>">
+                            <button class="btn btn-danger" type="submit">Excluir</button>
+                        </form>
                     </td>
                 </tr>
                 <?php endwhile; ?>

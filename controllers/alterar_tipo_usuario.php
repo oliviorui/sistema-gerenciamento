@@ -1,28 +1,57 @@
 <?php
-require_once '../config/conexao.php';
-session_start();
+require_once '../config/bootstrap.php';
 
-if ($_SESSION['usuario_tipo'] !== 'admin') {
-    header("Location: ../pages/auth/login.php");
+require_admin($conn);
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header("Location: ../pages/admin/usuarios.php");
     exit();
 }
 
-$id = intval($_GET['id']);
-$tipo_atual = $_GET['tipo'];
+csrf_verify_or_exit();
 
-$novo_tipo = ($tipo_atual === 'admin') ? 'usuario' : 'admin';
+$id = (int)($_POST['id'] ?? 0);
+$novo_tipo = trim((string)($_POST['tipo'] ?? ''));
 
-$query = "UPDATE usuarios SET tipo = '$novo_tipo' WHERE id_usuario = $id";
-mysqli_query($conn, $query);
+if ($id <= 0) {
+    header("Location: ../pages/admin/usuarios.php");
+    exit();
+}
+
+$allowed = ['estudante', 'funcionario', 'admin'];
+if (!in_array($novo_tipo, $allowed, true)) {
+    echo "<p>Tipo inválido.</p>";
+    exit();
+}
+
+// Evita o admin se auto-rebaixar sem querer (opcional)
+if ($id === (int)($_SESSION['usuario_id'] ?? 0) && $novo_tipo !== 'admin') {
+    echo "<p>Você não pode remover o seu próprio acesso de admin.</p>";
+    exit();
+}
+
+$sqlUp = "UPDATE usuarios SET tipo = ? WHERE id_usuario = ?";
+$stmtUp = $conn->prepare($sqlUp);
+
+if ($stmtUp) {
+    $stmtUp->bind_param("si", $novo_tipo, $id);
+    $stmtUp->execute();
+    $stmtUp->close();
+}
 
 // LOG
 $data_hora = date('Y-m-d H:i:s');
-$descricao = "Alterou tipo de usuário para $novo_tipo";
+$descricao = "Alterou tipo de usuário (ID $id) para $novo_tipo";
 
-mysqli_query($conn, "
-    INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade)
-    VALUES ({$_SESSION['usuario_id']}, '$data_hora', '$descricao', 'Admin')
-");
+$sqlLog = "INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade) VALUES (?, ?, ?, 'Admin')";
+$stmtLog = $conn->prepare($sqlLog);
+
+if ($stmtLog) {
+    $idAdmin = (int)($_SESSION['usuario_id'] ?? 0);
+    $stmtLog->bind_param("iss", $idAdmin, $data_hora, $descricao);
+    $stmtLog->execute();
+    $stmtLog->close();
+}
 
 header("Location: ../pages/admin/usuarios.php");
 exit();

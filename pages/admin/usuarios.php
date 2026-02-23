@@ -1,10 +1,6 @@
 <?php
-require_once '../../config/conexao.php';
 require_once 'protecao_admin.php';
 
-// =========================
-// BUSCAR USUÁRIOS
-// =========================
 $usuarios = mysqli_query($conn, "
     SELECT id_usuario, nome, email, tipo, data_cadastro
     FROM usuarios
@@ -35,7 +31,11 @@ $usuarios = mysqli_query($conn, "
         </nav>
 
         <div class="divider"></div>
-        <a class="btn btn-danger logout" href="../../controllers/logout.php">Sair</a>
+
+        <form action="../../controllers/logout.php" method="POST">
+            <?= csrf_field(); ?>
+            <button class="btn btn-danger logout" type="submit">Sair</button>
+        </form>
     </aside>
 
     <header class="topbar">
@@ -59,26 +59,36 @@ $usuarios = mysqli_query($conn, "
             <tbody>
                 <?php while ($u = mysqli_fetch_assoc($usuarios)): ?>
                 <tr>
-                    <td><?= $u['nome']; ?></td>
-                    <td><?= $u['email']; ?></td>
-                    <td><?= strtoupper($u['tipo']); ?></td>
-                    <td><?= $u['data_cadastro']; ?></td>
-                    <td>
+                    <td><?= htmlspecialchars((string)$u['nome'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?= htmlspecialchars((string)$u['email'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?= htmlspecialchars(strtoupper((string)$u['tipo']), ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td><?= htmlspecialchars((string)$u['data_cadastro'], ENT_QUOTES, 'UTF-8'); ?></td>
+                    <td style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
 
-                        <!-- PROMOVER / REBAIXAR -->
-                        <a class="btn <?= $u['tipo'] === 'admin' ? 'btn-info' : 'btn-success'; ?>"
-                           href="../../controllers/alterar_tipo_usuario.php?id=<?= $u['id_usuario']; ?>&tipo=<?= $u['tipo']; ?>">
-                            <?= $u['tipo'] === 'admin' ? 'Tornar Usuário' : 'Tornar Admin'; ?>
-                        </a>
+                        <!-- Alterar tipo -->
+                        <form action="../../controllers/alterar_tipo_usuario.php" method="POST" style="display:flex; gap:8px; align-items:center;">
+                            <?= csrf_field(); ?>
+                            <input type="hidden" name="id" value="<?= (int)$u['id_usuario']; ?>">
 
-                        <!-- EXCLUIR -->
-                        <?php if ($u['id_usuario'] != $_SESSION['usuario_id']): ?>
-                            <a class="btn btn-danger"
-                               onclick="return confirm('Tem certeza que deseja excluir este usuário?');"
-                               href="../../controllers/excluir_usuario.php?id=<?= $u['id_usuario']; ?>">
-                                Excluir
-                            </a>
+                            <select name="tipo" required>
+                                <option value="estudante" <?= $u['tipo']==='estudante'?'selected':''; ?>>Estudante</option>
+                                <option value="funcionario" <?= $u['tipo']==='funcionario'?'selected':''; ?>>Funcionário</option>
+                                <option value="admin" <?= $u['tipo']==='admin'?'selected':''; ?>>Admin</option>
+                            </select>
+
+                            <button type="submit" class="btn btn-success">Salvar</button>
+                        </form>
+
+                        <!-- Excluir -->
+                        <?php if ((int)$u['id_usuario'] !== (int)($_SESSION['usuario_id'] ?? 0)): ?>
+                            <form action="../../controllers/excluir_usuario.php" method="POST" style="display:inline;"
+                                  onsubmit="return confirm('Tem certeza que deseja excluir este usuário?');">
+                                <?= csrf_field(); ?>
+                                <input type="hidden" name="id" value="<?= (int)$u['id_usuario']; ?>">
+                                <button type="submit" class="btn btn-danger">Excluir</button>
+                            </form>
                         <?php endif; ?>
+
                     </td>
                 </tr>
                 <?php endwhile; ?>

@@ -1,10 +1,8 @@
 <?php
-    session_start();
-    // Verifica se o usuário está autenticado
-    if (!isset($_SESSION['usuario_id'])) {
-        header("Location: ../auth/login.php");
-        exit();
-    }
+require_once '../../config/bootstrap.php';
+require_login($conn);
+
+$usuario_nome = $_SESSION['usuario_nome'] ?? 'Usuário';
 ?>
 
 <!DOCTYPE html>
@@ -32,7 +30,7 @@
             <div class="divider"></div>
 
             <form action="../../controllers/logout.php" method="POST">
-                <input type="hidden" name="acao" value="logout">
+                <?= csrf_field(); ?>
                 <button class="btn btn-danger logout" type="submit">Sair</button>
             </form>
         </aside>
@@ -40,7 +38,7 @@
         <header class="topbar">
             <h1>Logs</h1>
             <div class="actions">
-                <span class="muted">Bem-vindo(a), <strong id="usuarioNome"></strong></span>
+                <span class="muted">Bem-vindo(a), <strong id="usuarioNome"><?= htmlspecialchars((string)$usuario_nome, ENT_QUOTES, 'UTF-8'); ?></strong></span>
             </div>
         </header>
 
@@ -71,13 +69,7 @@
                 method: 'GET',
                 dataType: 'json',
                 success: function(response) {
-                    // Atualiza o nome do usuário logado
-                    if (response.usuarios.length > 0) {
-                        $("#usuarioNome").text(response.usuarios[0].nome);
-                    }
-
-                    // Preenche a tabela de logs
-                    let logs = response.logs_atividades;
+                    let logs = response.logs_atividades || [];
                     let tabelaLogs = $("#tabelaLogs");
                     tabelaLogs.empty();
 

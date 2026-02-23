@@ -1,82 +1,115 @@
 <?php
-session_start();
-require_once '../config/conexao.php';
+require_once '../config/bootstrap.php';
 
-header('Content-Type: application/json');
+require_login($conn);
 
-// Verifica se o usuário está autenticado
-if (!isset($_SESSION['usuario_id'])) {
-    echo json_encode(["Erro" => "Usuário não autenticado"]);
-    exit();
-}
+header('Content-Type: application/json; charset=utf-8');
 
-$id_usuario = $_SESSION['usuario_id'];
-$searchTerm = isset($_GET['search']) ? mysqli_real_escape_string($conn, $_GET['search']) : '';
+$id_usuario = (int)($_SESSION['usuario_id'] ?? 0);
+$tipo_usuario = (string)($_SESSION['usuario_tipo'] ?? 'usuario');
+$nome_usuario = (string)($_SESSION['usuario_nome'] ?? 'Usuário');
 
-// Inicializa o array de dados
+$searchTerm = trim((string)($_GET['search'] ?? ''));
+$like = '%' . $searchTerm . '%';
+
 $dados = [];
+$dados['current_user'] = [
+    'id_usuario' => $id_usuario,
+    'nome' => $nome_usuario,
+    'tipo' => $tipo_usuario,
+];
 
-// Buscar usuários
-$query = "SELECT id_usuario, nome, email, data_cadastro FROM usuarios";
-$result = mysqli_query($conn, $query);
-if (!$result) {
-    echo json_encode(["Erro" => "Erro na consulta de usuários: " . mysqli_error($conn)]);
-    exit();
+/**
+ * 1) Usuários (SÓ ADMIN)
+ */
+if ($tipo_usuario === 'admin') {
+    $usuarios = [];
+    $sqlUsers = "SELECT id_usuario, nome, email, data_cadastro, tipo FROM usuarios ORDER BY nome ASC";
+    $resUsers = $conn->query($sqlUsers);
+    if ($resUsers) {
+        while ($row = $resUsers->fetch_assoc()) {
+            $usuarios[] = $row;
+        }
+    }
+    $dados['usuarios'] = $usuarios;
+} else {
+    $dados['usuarios'] = []; // mantém compatibilidade, mas vazio
 }
-$usuarios = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $usuarios[] = $row;
-}
-$dados["usuarios"] = $usuarios;
 
-// Buscar disciplinas com filtro
-$query = "SELECT id_disciplina, nome, codigo, descricao 
-          FROM disciplinas 
-          WHERE nome LIKE '%$searchTerm%' OR descricao LIKE '%$searchTerm%'";
-$result = mysqli_query($conn, $query);
-if (!$result) {
-    echo json_encode(["Erro" => "Erro na consulta de disciplinas: " . mysqli_error($conn)]);
-    exit();
-}
+/**
+ * 2) Disciplinas (com filtro)
+ */
 $disciplinas = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $disciplinas[] = $row;
-}
-$dados["disciplinas"] = $disciplinas;
+$sqlDis = "SELECT id_disciplina, nome, codigo, descricao
+           FROM disciplinas
+           WHERE (? = '' OR nome LIKE ? OR descricao LIKE ?)
+           ORDER BY nome ASC";
 
-// Buscar notas do usuário autenticado com filtro
-$query = "SELECT n.id_nota, d.nome AS disciplina, n.nota, n.tipo_avaliacao, n.data_avaliacao 
-          FROM notas n
-          JOIN disciplinas d ON n.id_disciplina = d.id_disciplina
-          WHERE n.id_usuario = $id_usuario 
-          AND (d.nome LIKE '%$searchTerm%' OR n.nota LIKE '%$searchTerm%')";
-$result = mysqli_query($conn, $query);
-if (!$result) {
-    echo json_encode(["Erro" => "Erro na consulta de notas: " . mysqli_error($conn)]);
-    exit();
+$stmtDis = $conn->prepare($sqlDis);
+if ($stmtDis) {
+    $empty = ($searchTerm === '') ? '' : 'x'; // truque simples pra controlar o OR
+    $stmtDis->bind_param("sss", $empty, $like, $like);
+    $stmtDis->execute();
+    $resDis = $stmtDis->get_result();
+
+    if ($resDis) {
+        while ($row = $resDis->fetch_assoc()) {
+            $disciplinas[] = $row;
+        }
+    }
+    $stmtDis->close();
 }
+$dados['disciplinas'] = $disciplinas;
+
+/**
+ * 3) Notas do usuário logado (com filtro)
+ */
 $notas = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $notas[] = $row;
-}
-$dados["notas"] = $notas;
+$sqlNotas = "SELECT n.id_nota, d.nome AS disciplina, n.nota, n.tipo_avaliacao, n.data_avaliacao
+             FROM notas n
+             INNER JOIN disciplinas d ON n.id_disciplina = d.id_disciplina
+             WHERE n.id_usuario = ?
+               AND (? = '' OR d.nome LIKE ? OR CAST(n.nota AS CHAR) LIKE ?)
+             ORDER BY n.data_avaliacao DESC";
 
-// Buscar logs de atividades (sem filtro, pois não foi especificado)
-$query = "SELECT id_log, data_hora, descricao, tipo_actividade 
-          FROM logs_atividades 
-          WHERE id_usuario = $id_usuario
-          ORDER BY data_hora DESC";
-$result = mysqli_query($conn, $query);
-if (!$result) {
-    echo json_encode(["Erro" => "Erro na consulta de logs de atividades: " . mysqli_error($conn)]);
-    exit();
+$stmtNotas = $conn->prepare($sqlNotas);
+if ($stmtNotas) {
+    $stmtNotas->bind_param("isss", $id_usuario, $searchTerm, $like, $like);
+    $stmtNotas->execute();
+    $resNotas = $stmtNotas->get_result();
+
+    if ($resNotas) {
+        while ($row = $resNotas->fetch_assoc()) {
+            $notas[] = $row;
+        }
+    }
+    $stmtNotas->close();
 }
+$dados['notas'] = $notas;
+
+/**
+ * 4) Logs do usuário logado
+ */
 $logs = [];
-while ($row = mysqli_fetch_assoc($result)) {
-    $logs[] = $row;
-}
-$dados["logs_atividades"] = $logs;
+$sqlLogs = "SELECT id_log, data_hora, descricao, tipo_actividade
+            FROM logs_atividades
+            WHERE id_usuario = ?
+            ORDER BY data_hora DESC";
 
-// Retorna todos os dados em JSON
+$stmtLogs = $conn->prepare($sqlLogs);
+if ($stmtLogs) {
+    $stmtLogs->bind_param("i", $id_usuario);
+    $stmtLogs->execute();
+    $resLogs = $stmtLogs->get_result();
+
+    if ($resLogs) {
+        while ($row = $resLogs->fetch_assoc()) {
+            $logs[] = $row;
+        }
+    }
+    $stmtLogs->close();
+}
+$dados['logs_atividades'] = $logs;
+
 echo json_encode($dados);
-?>
+exit();

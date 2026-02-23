@@ -1,29 +1,49 @@
 <?php
-require_once '../config/conexao.php';
-session_start();
+require_once '../config/bootstrap.php';
 
-if ($_SESSION['usuario_tipo'] !== 'admin') {
-    header("Location: ../pages/auth/login.php");
+require_admin($conn);
+
+if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header("Location: ../pages/admin/disciplinas.php");
     exit();
 }
 
-$nome = mysqli_real_escape_string($conn, $_POST['nome']);
-$codigo = mysqli_real_escape_string($conn, $_POST['codigo']);
-$descricao = mysqli_real_escape_string($conn, $_POST['descricao']);
+csrf_verify_or_exit();
 
-mysqli_query($conn, "
-    INSERT INTO disciplinas (nome, codigo, descricao)
-    VALUES ('$nome', '$codigo', '$descricao')
-");
+$nome = trim((string)($_POST['nome'] ?? ''));
+$codigo = trim((string)($_POST['codigo'] ?? ''));
+$descricao = trim((string)($_POST['descricao'] ?? ''));
+
+if ($nome === '' || $codigo === '') {
+    echo "<p>Nome e código são obrigatórios.</p>";
+    exit();
+}
+
+$sql = "INSERT INTO disciplinas (nome, codigo, descricao) VALUES (?, ?, ?)";
+$stmt = $conn->prepare($sql);
+
+if (!$stmt) {
+    echo "<p>Erro ao preparar inserção.</p>";
+    exit();
+}
+
+$stmt->bind_param("sss", $nome, $codigo, $descricao);
+$stmt->execute();
+$stmt->close();
 
 // LOG
 $data_hora = date('Y-m-d H:i:s');
 $descricao_log = "Adicionou disciplina: $nome";
 
-mysqli_query($conn, "
-    INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade)
-    VALUES ({$_SESSION['usuario_id']}, '$data_hora', '$descricao_log', 'Admin')
-");
+$sqlLog = "INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade) VALUES (?, ?, ?, 'Admin')";
+$stmtLog = $conn->prepare($sqlLog);
+
+if ($stmtLog) {
+    $idAdmin = (int)($_SESSION['usuario_id'] ?? 0);
+    $stmtLog->bind_param("iss", $idAdmin, $data_hora, $descricao_log);
+    $stmtLog->execute();
+    $stmtLog->close();
+}
 
 header("Location: ../pages/admin/disciplinas.php");
 exit();
