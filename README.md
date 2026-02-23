@@ -22,6 +22,14 @@ Inclui autenticação (login e cadastro), registo de dados, logs e visualizaçã
 - Logs do sistema
 - Visualização gráfica de dados
 - Separação entre páginas públicas e área autenticada
+- Autenticação segura (session + remember token)
+- CSRF Protection
+- Roles: Admin, Funcionário, Estudante
+- Gestão de disciplinas
+- Lançamento de notas
+- Sistema de atividades e entregas
+- Upload seguro de arquivos
+- Controle de permissões
 
 ---
 
