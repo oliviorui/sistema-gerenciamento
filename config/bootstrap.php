@@ -195,8 +195,8 @@ function require_docente_or_admin(mysqli $conn): void
     require_role($conn, ['docente', 'admin']);
 }
 
-// Backward-compat: caso ainda existam páginas antigas
+/* compatibilidade temporária (se ainda existir código antigo) */
 function require_funcionario_or_admin(mysqli $conn): void
 {
-    require_docente_or_admin($conn);
+    require_role($conn, ['docente', 'admin', 'funcionario']);
 }

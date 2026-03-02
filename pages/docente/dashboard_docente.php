@@ -1,5 +1,5 @@
 <?php
-require_once 'protecao_docente.php';
+require_once __DIR__ . '/protecao_docente.php';
 
 $idDocente = (int)($_SESSION['usuario_id'] ?? 0);
 $nomeDocente = (string)($_SESSION['usuario_nome'] ?? 'Docente');

@@ -42,17 +42,19 @@ if (!is_array($usuario) || !password_verify($senha, (string)$usuario['senha'])) 
     exit();
 }
 
-// Compatibilidade: migra tipos antigos para os actuais
-if (($usuario['tipo'] ?? '') === 'usuario') {
-    $usuario['tipo'] = 'estudante';
-}
-if (($usuario['tipo'] ?? '') === 'funcionario') {
-    $usuario['tipo'] = 'docente';
-}
+/**
+ * Compatibilidade:
+ * - se a BD ainda tiver 'funcionario', converte para 'docente'
+ * - se tiver 'usuario', converte para 'estudante'
+ */
+$tipoDB = (string)($usuario['tipo'] ?? 'estudante');
+if ($tipoDB === 'funcionario') $tipoDB = 'docente';
+if ($tipoDB === 'usuario') $tipoDB = 'estudante';
+$usuario['tipo'] = $tipoDB;
 
 login_set_session($usuario);
 
-// Remember token (30 dias)
+/* remember token (30 dias) */
 $rawToken = bin2hex(random_bytes(32));
 $tokenHash = hash('sha256', $rawToken);
 $expiresAt = date('Y-m-d H:i:s', time() + (30 * 24 * 60 * 60));
@@ -65,14 +67,12 @@ if ($stmtTok) {
     $stmtTok->bind_param("iss", $idUsuario, $tokenHash, $expiresAt);
     $stmtTok->execute();
     $stmtTok->close();
-
     remember_cookie_set($rawToken, 30);
 }
 
-// Log de login
+/* log */
 $data_hora = date('Y-m-d H:i:s');
 $descricao = "Login realizado";
-
 $sqlLog = "INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade) VALUES (?, ?, ?, 'Login')";
 $stmtLog = $conn->prepare($sqlLog);
 
@@ -83,6 +83,7 @@ if ($stmtLog) {
     $stmtLog->close();
 }
 
+/* redirect */
 $tipo = (string)($usuario['tipo'] ?? 'estudante');
 
 if ($tipo === 'admin') {
