@@ -1,160 +1,170 @@
-DROP DATABASE sistema_academico;
-
+DROP DATABASE IF EXISTS sistema_academico;
 CREATE DATABASE sistema_academico;
 USE sistema_academico;
 
 -- =========================
--- TABELA DE USUÁRIOS
+-- TURMAS
+-- =========================
+CREATE TABLE turmas (
+  id_turma INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(60) NOT NULL UNIQUE
+);
+
+-- =========================
+-- USUÁRIOS (3 perfis)
+-- Estudante pertence a UMA turma (id_turma)
 -- =========================
 CREATE TABLE usuarios (
-    id_usuario INT AUTO_INCREMENT,
-    nome VARCHAR(50) NOT NULL,
-    email VARCHAR(50) UNIQUE NOT NULL,
-    senha VARCHAR(255) NOT NULL,
-
-    -- NOVO: 3 actores no sistema
-    tipo ENUM('estudante', 'funcionario', 'admin') NOT NULL DEFAULT 'estudante',
-
-    -- Melhor: já cria automaticamente a data
-    data_cadastro DATE NOT NULL DEFAULT (CURDATE()),
-
-    PRIMARY KEY (id_usuario)
+  id_usuario INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(80) NOT NULL,
+  email VARCHAR(80) UNIQUE NOT NULL,
+  senha VARCHAR(255) NOT NULL,
+  tipo ENUM('estudante','docente','admin') NOT NULL DEFAULT 'estudante',
+  id_turma INT NULL,
+  data_cadastro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (id_turma) REFERENCES turmas(id_turma) ON DELETE SET NULL
 );
 
 -- =========================
--- TABELA DE DISCIPLINAS
+-- DISCIPLINAS
 -- =========================
 CREATE TABLE disciplinas (
-    id_disciplina INT AUTO_INCREMENT,
-    nome VARCHAR(50) NOT NULL,
-    codigo VARCHAR(5) NOT NULL,
-    descricao TEXT,
-
-    PRIMARY KEY (id_disciplina)
+  id_disciplina INT AUTO_INCREMENT PRIMARY KEY,
+  nome VARCHAR(100) NOT NULL UNIQUE
 );
 
 -- =========================
--- TABELA DE NOTAS
+-- ATRIBUIÇÕES (docente–turma–disciplina)
+-- =========================
+CREATE TABLE atribuicoes (
+  id_atribuicao INT AUTO_INCREMENT PRIMARY KEY,
+  id_docente INT NOT NULL,
+  id_turma INT NOT NULL,
+  id_disciplina INT NOT NULL,
+  data_atribuicao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (id_docente) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+  FOREIGN KEY (id_turma) REFERENCES turmas(id_turma) ON DELETE CASCADE,
+  FOREIGN KEY (id_disciplina) REFERENCES disciplinas(id_disciplina) ON DELETE CASCADE,
+
+  UNIQUE KEY uq_atribuicao (id_docente, id_turma, id_disciplina)
+);
+
+-- =========================
+-- ACTIVIDADES (sempre ligadas a uma atribuição)
+-- =========================
+CREATE TABLE atividades (
+  id_atividade INT AUTO_INCREMENT PRIMARY KEY,
+  id_atribuicao INT NOT NULL,
+  titulo VARCHAR(120) NOT NULL,
+  descricao TEXT,
+  data_limite DATE DEFAULT NULL,
+  data_criacao DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (id_atribuicao) REFERENCES atribuicoes(id_atribuicao) ON DELETE CASCADE
+);
+
+-- =========================
+-- ENTREGAS (submissões)
+-- =========================
+CREATE TABLE entregas (
+  id_entrega INT AUTO_INCREMENT PRIMARY KEY,
+  id_atividade INT NOT NULL,
+  id_estudante INT NOT NULL,
+
+  arquivo_nome_original VARCHAR(255) NOT NULL,
+  arquivo_nome_servidor VARCHAR(255) NOT NULL,
+  arquivo_mime VARCHAR(100) DEFAULT NULL,
+
+  comentario TEXT,
+  status ENUM('Pendente','Avaliado') NOT NULL DEFAULT 'Pendente',
+
+  data_entrega DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  nota DECIMAL(5,2) DEFAULT NULL,
+  feedback TEXT DEFAULT NULL,
+
+  FOREIGN KEY (id_atividade) REFERENCES atividades(id_atividade) ON DELETE CASCADE,
+  FOREIGN KEY (id_estudante) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+
+  UNIQUE KEY uq_entrega (id_atividade, id_estudante)
+);
+
+-- =========================
+-- NOTAS (docente lança para estudante numa disciplina)
+-- Validamos permissão via backend comparando com atribuicoes
 -- =========================
 CREATE TABLE notas (
-    id_nota INT AUTO_INCREMENT,
-    id_usuario INT NOT NULL,
-    id_disciplina INT NOT NULL,
-    nota DECIMAL(4,2),
-    data_avaliacao DATE,
-    tipo_avaliacao ENUM('Prova', 'Trabalho', 'Exame'),
+  id_nota INT AUTO_INCREMENT PRIMARY KEY,
+  id_docente INT NOT NULL,
+  id_estudante INT NOT NULL,
+  id_disciplina INT NOT NULL,
 
-    PRIMARY KEY (id_nota),
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
-    FOREIGN KEY (id_disciplina) REFERENCES disciplinas(id_disciplina) ON DELETE CASCADE
+  tipo_avaliacao VARCHAR(60) NOT NULL,
+  nota DECIMAL(5,2) NOT NULL,
+  data_avaliacao DATE DEFAULT NULL,
+  data_registo DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+  FOREIGN KEY (id_docente) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+  FOREIGN KEY (id_estudante) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+  FOREIGN KEY (id_disciplina) REFERENCES disciplinas(id_disciplina) ON DELETE CASCADE
 );
 
 -- =========================
--- TABELA DE LOGS
+-- LOGS
 -- =========================
 CREATE TABLE logs_atividades (
-    id_log INT AUTO_INCREMENT,
-    id_usuario INT,
-    data_hora DATETIME,
-    descricao TEXT,
-    tipo_actividade ENUM('Login', 'Logout', 'Cadastro', 'Registro', 'Admin'),
-
-    PRIMARY KEY (id_log),
-    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE SET NULL
+  id_log INT AUTO_INCREMENT PRIMARY KEY,
+  id_usuario INT DEFAULT NULL,
+  data_hora DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  descricao VARCHAR(255) NOT NULL,
+  tipo_actividade VARCHAR(50) NOT NULL,
+  FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE SET NULL
 );
 
 -- =========================
--- TOKENS (remember-me)
+-- REMEMBER ME (TOKENS)
 -- =========================
-CREATE TABLE IF NOT EXISTS user_tokens (
-    id_token INT AUTO_INCREMENT PRIMARY KEY,
-    id_usuario INT NOT NULL,
-    token_hash CHAR(64) NOT NULL,
-    expires_at DATETIME NOT NULL,
-    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_token_hash (token_hash),
-    INDEX idx_user_tokens_usuario (id_usuario),
-    CONSTRAINT fk_user_tokens_usuario
-        FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario)
-        ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS atividades (
-    id_atividade INT AUTO_INCREMENT PRIMARY KEY,
-    id_disciplina INT NOT NULL,
-    titulo VARCHAR(120) NOT NULL,
-    descricao TEXT NULL,
-    data_limite DATE NULL,
-    criado_por INT NOT NULL,
-    criado_em DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_ativ_disc (id_disciplina),
-    INDEX idx_ativ_criado_por (criado_por),
-    CONSTRAINT fk_ativ_disc
-        FOREIGN KEY (id_disciplina) REFERENCES disciplinas(id_disciplina)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_ativ_criado_por
-        FOREIGN KEY (criado_por) REFERENCES usuarios(id_usuario)
-        ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS entregas (
-    id_entrega INT AUTO_INCREMENT PRIMARY KEY,
-    id_atividade INT NOT NULL,
-    id_estudante INT NOT NULL,
-    comentario TEXT NULL,
-    arquivo_nome_original VARCHAR(255) NULL,
-    arquivo_nome_servidor VARCHAR(255) NULL,
-    arquivo_mime VARCHAR(120) NULL,
-    arquivo_tamanho INT NULL,
-    data_entrega DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    status ENUM('Pendente','Aprovado','Rejeitado') NOT NULL DEFAULT 'Pendente',
-    feedback TEXT NULL,
-    nota DECIMAL(5,2) NULL,
-    avaliado_por INT NULL,
-    avaliado_em DATETIME NULL,
-
-    UNIQUE KEY uq_entrega (id_atividade, id_estudante),
-    INDEX idx_entregas_atividade (id_atividade),
-    INDEX idx_entregas_estudante (id_estudante),
-
-    CONSTRAINT fk_ent_atividade
-        FOREIGN KEY (id_atividade) REFERENCES atividades(id_atividade)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_ent_estudante
-        FOREIGN KEY (id_estudante) REFERENCES usuarios(id_usuario)
-        ON DELETE CASCADE,
-    CONSTRAINT fk_ent_avaliado_por
-        FOREIGN KEY (avaliado_por) REFERENCES usuarios(id_usuario)
-        ON DELETE SET NULL
+CREATE TABLE user_tokens (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  id_usuario INT NOT NULL,
+  token_hash CHAR(64) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+  INDEX (token_hash)
 );
 
 -- =========================
--- DISCIPLINAS PADRÃO
+-- DADOS DEMO
+-- senha hash demo (mesma para todos)
 -- =========================
-INSERT INTO disciplinas (nome, codigo, descricao) VALUES
-('Algoritmos e Estruturas de Dados', 'AED01', 'Estudo de algoritmos, estruturas de dados e complexidade computacional.'),
-('Base de Dados', 'BD02', 'Modelagem, normalização e implementação de bancos de dados relacionais.'),
-('Programação Orientada a Objetos', 'POO03', 'Conceitos de programação orientada a objetos usando linguagens como Java e Python.'),
-('Redes de Computadores', 'RC04', 'Fundamentos de redes, protocolos, segurança e administração de redes.'),
-('Engenharia de Software', 'ES05', 'Processos de desenvolvimento de software, metodologias ágeis e boas práticas.'),
-('Sistemas Operacionais', 'SO06', 'Princípios de sistemas operacionais, gerenciamento de memória, processos e arquivos.'),
-('Desenvolvimento Web', 'DW07', 'Criação de aplicações web usando HTML, CSS, JavaScript e frameworks.'),
-('Segurança da Informação', 'SI08', 'Conceitos de segurança, criptografia, ataques cibernéticos e proteção de dados.'),
-('Ética e Legislação em TI', 'EL13', 'Aspectos éticos e legais relacionados ao uso da tecnologia da informação.'),
-('Gestão de Projetos de TI', 'GP14', 'Metodologias para planejamento, execução e monitoramento de projetos de tecnologia.');
+INSERT INTO turmas (nome) VALUES
+('Turma A'),
+('Turma B');
+
+INSERT INTO disciplinas (nome) VALUES
+('Matemática'),
+('Programação Web'),
+('Redes');
 
 -- =========================
--- USUÁRIO ADMIN PADRÃO
--- senha: Admin123  (já criptografada)
+-- DADOS DEMO (credenciais conhecidas)
 -- =========================
-INSERT INTO usuarios (nome, email, senha, tipo) VALUES
-('Administrador', 'admin@sistema.com', '$2y$10$TwQm5ZRkaoA8Z7Q3NMMb/u/8tGN4nHylBTdgrRUc/UO8.UFHe5StK', 'admin');
+-- admin@sistema.com / Admin123
+-- docente@sistema.com / Docente123
+-- estudante1@sistema.com / Estudante123
+-- estudante2@sistema.com / Estudante123
+-- estudante3@sistema.com / Estudante123
+-- =========================
+INSERT INTO usuarios (nome, email, senha, tipo, id_turma) VALUES
+('Admin',        'admin@sistema.com',      '$2y$10$51nUV.FH1CEQD6mFLUyPMeB1Pl4ts8YEHzfFCd2rqc2hO1srTIus2', 'admin',     NULL),
+('Docente 1',    'docente@sistema.com',    '$2y$10$O5kTt0ktDtebhK4e5qCjMOHZPnVtfkQFm0Cfd1mkvR3XsfyqjBh1K', 'docente',   NULL),
+('Estudante A1', 'estudante1@sistema.com', '$2y$10$cgtst0M5bL3ZtGJ1eyJikuK50.2kNt0Np9WCX8u4SVUG.nlu5DiRS', 'estudante', 1),
+('Estudante A2', 'estudante2@sistema.com', '$2y$10$cgtst0M5bL3ZtGJ1eyJikuK50.2kNt0Np9WCX8u4SVUG.nlu5DiRS', 'estudante', 1),
+('Estudante B1', 'estudante3@sistema.com', '$2y$10$cgtst0M5bL3ZtGJ1eyJikuK50.2kNt0Np9WCX8u4SVUG.nlu5DiRS', 'estudante', 2);
 
--- =========================
--- (Opcional) FUNCIONÁRIO PADRÃO
--- senha: Funcionario123 (você pode mudar depois)
--- hash pronto (pode gerar outro se quiser)
--- =========================
-INSERT INTO usuarios (nome, email, senha, tipo) VALUES
-('Carlos Professor', 'funcionario@sistema.com', '$2y$10$Sxn1Iiavnf4atykiAJrks.8UXXFSBrehmPA1PRpEPuJTOdi.FaaZa', 'funcionario');
+-- Atribuições: Docente 1 -> Turma A (Matemática e Programação Web)
+INSERT INTO atribuicoes (id_docente, id_turma, id_disciplina) VALUES
+(2, 1, 1),
+(2, 1, 2);

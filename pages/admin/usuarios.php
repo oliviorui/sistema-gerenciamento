@@ -1,101 +1,114 @@
 <?php
 require_once 'protecao_admin.php';
 
-$usuarios = mysqli_query($conn, "
-    SELECT id_usuario, nome, email, tipo, data_cadastro
-    FROM usuarios
-    ORDER BY nome ASC
-");
-?>
+/** turmas para dropdown */
+$turmas = [];
+$rt = mysqli_query($conn, "SELECT id_turma, nome FROM turmas ORDER BY nome ASC");
+if ($rt) while ($row = mysqli_fetch_assoc($rt)) $turmas[] = $row;
 
+/** usuários */
+$sql = "
+SELECT u.id_usuario, u.nome, u.email, u.tipo, u.id_turma, u.data_cadastro, t.nome AS turma
+FROM usuarios u
+LEFT JOIN turmas t ON t.id_turma = u.id_turma
+ORDER BY u.nome ASC
+";
+$usuarios = mysqli_query($conn, $sql);
+?>
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="pt-br">
 <head>
-    <meta charset="UTF-8">
-    <title>Gerir Usuários</title>
-    <link rel="stylesheet" href="../../css/app.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Utilizadores</title>
+  <link rel="stylesheet" href="../../css/app.css">
 </head>
 <body>
-
 <div class="app">
-    <aside class="sidebar">
-        <div class="brand">
-            <img src="../../img/logo.png" alt="Logo">
-            <strong>Sistema Acadêmico</strong>
-        </div>
+  <aside class="sidebar">
+    <div class="brand">
+      <img src="../../img/logo.png" alt="Logo">
+      <strong>Sistema Acadêmico</strong>
+    </div>
+    <nav class="nav">
+      <a href="dashboard_admin.php">Dashboard</a>
+      <a class="active" href="usuarios.php">Utilizadores</a>
+      <a href="turmas.php">Turmas</a>
+      <a href="disciplinas.php">Disciplinas</a>
+      <a href="atribuicoes.php">Atribuições</a>
+      <a href="logs.php">Logs</a>
+      <a href="../../controllers/logout.php">Sair</a>
+    </nav>
+  </aside>
 
-        <nav class="nav">
-            <a href="dashboard_admin.php">Dashboard</a>
-            <a href="usuarios.php">Gerir Usuários</a>
-            <a href="disciplinas.php">Gerir Disciplinas</a>
-        </nav>
+  <main class="content">
+    <h1>Gerenciar Utilizadores</h1>
 
-        <div class="divider"></div>
+    <section class="card">
+      <h2>Lista de Utilizadores</h2>
 
-        <form action="../../controllers/logout.php" method="POST">
-            <?= csrf_field(); ?>
-            <button class="btn btn-danger logout" type="submit">Sair</button>
-        </form>
-    </aside>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Nome</th>
+            <th>E-mail</th>
+            <th>Tipo</th>
+            <th>Turma (se estudante)</th>
+            <th>Cadastrado</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+        <?php if ($usuarios): ?>
+          <?php while ($u = mysqli_fetch_assoc($usuarios)): ?>
+            <tr>
+              <td><?= htmlspecialchars($u['nome'] ?? '') ?></td>
+              <td><?= htmlspecialchars($u['email'] ?? '') ?></td>
 
-    <header class="topbar">
-        <h1>Gestão de Usuários</h1>
-        <div class="actions">
-            <a class="btn btn-ghost" href="dashboard_admin.php">← Voltar</a>
-        </div>
-    </header>
+              <td>
+                <form method="POST" action="../../controllers/admin_atualizar_usuario.php" class="inline-form">
+                  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_get_token()) ?>">
+                  <input type="hidden" name="id_usuario" value="<?= (int)$u['id_usuario'] ?>">
 
-    <main class="main">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Nome</th>
-                    <th>Email</th>
-                    <th>Tipo</th>
-                    <th>Cadastro</th>
-                    <th>Ações</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php while ($u = mysqli_fetch_assoc($usuarios)): ?>
-                <tr>
-                    <td><?= htmlspecialchars((string)$u['nome'], ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td><?= htmlspecialchars((string)$u['email'], ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td><?= htmlspecialchars(strtoupper((string)$u['tipo']), ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td><?= htmlspecialchars((string)$u['data_cadastro'], ENT_QUOTES, 'UTF-8'); ?></td>
-                    <td style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                  <select name="tipo" required>
+                    <option value="estudante" <?= ($u['tipo']==='estudante')?'selected':''; ?>>Estudante</option>
+                    <option value="docente" <?= ($u['tipo']==='docente')?'selected':''; ?>>Docente</option>
+                    <option value="admin" <?= ($u['tipo']==='admin')?'selected':''; ?>>Admin</option>
+                  </select>
+              </td>
 
-                        <!-- Alterar tipo -->
-                        <form action="../../controllers/alterar_tipo_usuario.php" method="POST" style="display:flex; gap:8px; align-items:center;">
-                            <?= csrf_field(); ?>
-                            <input type="hidden" name="id" value="<?= (int)$u['id_usuario']; ?>">
+              <td>
+                  <select name="id_turma">
+                    <option value="">—</option>
+                    <?php foreach ($turmas as $t): ?>
+                      <option value="<?= (int)$t['id_turma'] ?>" <?= ((int)($u['id_turma'] ?? 0) === (int)$t['id_turma']) ? 'selected' : '' ?>>
+                        <?= htmlspecialchars($t['nome']) ?>
+                      </option>
+                    <?php endforeach; ?>
+                  </select>
+              </td>
 
-                            <select name="tipo" required>
-                                <option value="estudante" <?= $u['tipo']==='estudante'?'selected':''; ?>>Estudante</option>
-                                <option value="funcionario" <?= $u['tipo']==='funcionario'?'selected':''; ?>>Funcionário</option>
-                                <option value="admin" <?= $u['tipo']==='admin'?'selected':''; ?>>Admin</option>
-                            </select>
+              <td><?= htmlspecialchars($u['data_cadastro'] ?? '') ?></td>
+              <td>
+                  <button type="submit">Salvar</button>
+                </form>
 
-                            <button type="submit" class="btn btn-success">Salvar</button>
-                        </form>
+                <form method="POST" action="../../controllers/admin_excluir_usuario.php" class="inline-form"
+                      onsubmit="return confirm('Excluir utilizador?');">
+                  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(csrf_get_token()) ?>">
+                  <input type="hidden" name="id_usuario" value="<?= (int)$u['id_usuario'] ?>">
+                  <button type="submit" class="danger">Excluir</button>
+                </form>
+              </td>
+            </tr>
+          <?php endwhile; ?>
+        <?php endif; ?>
+        </tbody>
+      </table>
 
-                        <!-- Excluir -->
-                        <?php if ((int)$u['id_usuario'] !== (int)($_SESSION['usuario_id'] ?? 0)): ?>
-                            <form action="../../controllers/excluir_usuario.php" method="POST" style="display:inline;"
-                                  onsubmit="return confirm('Tem certeza que deseja excluir este usuário?');">
-                                <?= csrf_field(); ?>
-                                <input type="hidden" name="id" value="<?= (int)$u['id_usuario']; ?>">
-                                <button type="submit" class="btn btn-danger">Excluir</button>
-                            </form>
-                        <?php endif; ?>
-
-                    </td>
-                </tr>
-                <?php endwhile; ?>
-            </tbody>
-        </table>
-    </main>
+      <p><small>Regra: apenas estudantes devem ter turma. Docente/Admin ficam com turma vazia.</small></p>
+    </section>
+  </main>
 </div>
-
 </body>
 </html>

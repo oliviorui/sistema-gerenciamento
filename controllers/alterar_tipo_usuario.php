@@ -18,7 +18,7 @@ if ($id <= 0) {
     exit();
 }
 
-$allowed = ['estudante', 'funcionario', 'admin'];
+$allowed = ['estudante','docente','admin'];
 if (!in_array($novo_tipo, $allowed, true)) {
     echo "<p>Tipo inválido.</p>";
     exit();
@@ -26,32 +26,19 @@ if (!in_array($novo_tipo, $allowed, true)) {
 
 // Evita o admin se auto-rebaixar sem querer (opcional)
 if ($id === (int)($_SESSION['usuario_id'] ?? 0) && $novo_tipo !== 'admin') {
-    echo "<p>Você não pode remover o seu próprio acesso de admin.</p>";
+    echo "<p>Você não pode remover o seu próprio acesso de administrador.</p>";
     exit();
 }
 
-$sqlUp = "UPDATE usuarios SET tipo = ? WHERE id_usuario = ?";
-$stmtUp = $conn->prepare($sqlUp);
-
-if ($stmtUp) {
-    $stmtUp->bind_param("si", $novo_tipo, $id);
-    $stmtUp->execute();
-    $stmtUp->close();
+$stmt = $conn->prepare("UPDATE usuarios SET tipo = ? WHERE id_usuario = ?");
+if (!$stmt) {
+    echo "<p>Erro ao preparar atualização.</p>";
+    exit();
 }
 
-// LOG
-$data_hora = date('Y-m-d H:i:s');
-$descricao = "Alterou tipo de usuário (ID $id) para $novo_tipo";
-
-$sqlLog = "INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade) VALUES (?, ?, ?, 'Admin')";
-$stmtLog = $conn->prepare($sqlLog);
-
-if ($stmtLog) {
-    $idAdmin = (int)($_SESSION['usuario_id'] ?? 0);
-    $stmtLog->bind_param("iss", $idAdmin, $data_hora, $descricao);
-    $stmtLog->execute();
-    $stmtLog->close();
-}
+$stmt->bind_param("si", $novo_tipo, $id);
+$stmt->execute();
+$stmt->close();
 
 header("Location: ../pages/admin/usuarios.php");
 exit();

@@ -1,11 +1,23 @@
 <?php
-// Inicia a sessão
-session_start();
+require_once '../../config/bootstrap.php';
 
-// Verifica se o usuário já está logado (se a sessão estiver ativa ou se o cookie estiver presente)
-if (isset($_SESSION['usuario_id']) || isset($_COOKIE['user_id'])) {
-    // Se estiver logado, redireciona para o dashboard
-    header('Location: ../logged/dashboard.php');
+start_secure_session();
+
+// Se já estiver autenticado, redireciona para o painel correcto
+if (!empty($_SESSION['usuario_id'])) {
+    $tipo = (string)($_SESSION['usuario_tipo'] ?? 'estudante');
+
+    if ($tipo === 'admin') {
+        header('Location: ../admin/dashboard_admin.php');
+        exit();
+    }
+
+    if ($tipo === 'docente') {
+        header('Location: ../docente/dashboard_docente.php');
+        exit();
+    }
+
+    header('Location: ../estudante/dashboard.php');
     exit();
 }
 ?>
@@ -16,39 +28,36 @@ if (isset($_SESSION['usuario_id']) || isset($_COOKIE['user_id'])) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema Acadêmico - Login</title>
+
+    <!-- USA O CSS CORRETO -->
     <link rel="stylesheet" href="../../css/login.css">
-    <script src="../../js/jquery.js"></script>
-    <script src="../../js/validate.js"></script>
-    <script src="../../js/valida_form.js"></script>
-
-    <style>
-        input.error {
-            border: 1px solid red;
-            color: red;
-            margin-top: -5px;
-        }
-
-        label.error {
-            color: red;
-        }
-    </style>
 </head>
 <body>
-    <div class="container">
-        <div class="login-box">
-            <img src="../../img/logo.png" alt="Logo do Sistema" class="logo">
-            <h1>Faça login e desfrute do sistema</h1>
-            <form action="../../controllers/processa_login.php" method="POST" id="login">
-                <label for="email">E-mail:</label>
-                <input type="email" id="email" name="email" placeholder="Digite seu e-mail">
-                
-                <label for="senha">Senha:</label>
-                <input type="password" id="senha" name="senha" placeholder="Digite sua senha">
 
-                <button type="submit">Entrar</button>
-            </form>
-            <p>Não tem conta? <a href="cadastro.php">Cadastre-se aqui</a>.</p>
-        </div>
+<div class="container">
+    <div class="login-box">
+
+        <img src="../../img/logo.png" alt="Logo do Sistema" class="logo">
+
+        <h1>Entrar no Sistema</h1>
+
+        <form action="../../controllers/processa_login.php" method="POST">
+            <label for="email">E-mail</label>
+            <input type="email" name="email" id="email" required>
+
+            <label for="senha">Senha</label>
+            <input type="password" name="senha" id="senha" required>
+
+            <button type="submit">Entrar</button>
+        </form>
+
+        <p>
+            Ainda não tem conta?
+            <a href="cadastro.php">Registar estudante</a>
+        </p>
+
     </div>
+</div>
+
 </body>
 </html>

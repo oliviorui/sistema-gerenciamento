@@ -1,88 +1,86 @@
 <?php
 require_once '../config/bootstrap.php';
 
-require_funcionario_or_admin($conn);
+require_docente_or_admin($conn);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header("Location: ../pages/funcionario/entregas.php");
-    exit();
+  header("Location: ../pages/docente/entregas.php");
+  exit();
 }
 
 csrf_verify_or_exit();
 
+$idDocente = (int)($_SESSION['usuario_id'] ?? 0);
+
 $id_entrega = (int)($_POST['id_entrega'] ?? 0);
-$status = trim((string)($_POST['status'] ?? ''));
+$notaRaw = (string)($_POST['nota'] ?? '');
 $feedback = trim((string)($_POST['feedback'] ?? ''));
-$notaRaw = trim((string)($_POST['nota'] ?? ''));
+$status = trim((string)($_POST['status'] ?? 'Pendente'));
 
-if ($id_entrega <= 0) {
-    header("Location: ../pages/funcionario/entregas.php");
-    exit();
+if ($id_entrega <= 0 || $notaRaw === '') {
+  echo "<p>Dados inválidos.</p>";
+  exit();
 }
 
-$allowedStatus = ['Pendente', 'Aprovado', 'Rejeitado'];
-if (!in_array($status, $allowedStatus, true)) {
-    echo "<p>Status inválido.</p>";
-    exit();
+$nota = (float)$notaRaw;
+if ($nota < 0 || $nota > 20) {
+  echo "<p>Nota inválida.</p>";
+  exit();
 }
 
-$nota = null;
-if ($notaRaw !== '') {
-    $notaFloat = (float)$notaRaw;
-    if ($notaFloat < 0 || $notaFloat > 20) {
-        echo "<p>Nota inválida (0–20).</p>";
-        exit();
-    }
-    $nota = $notaFloat;
+if (!in_array($status, ['Pendente','Avaliado'], true)) {
+  echo "<p>Status inválido.</p>";
+  exit();
 }
 
-$avaliado_por = (int)($_SESSION['usuario_id'] ?? 0);
+/**
+ * Verifica se esta entrega pertence a uma actividade das atribuições do docente
+ */
+$sqlCheck = "
+SELECT 1
+FROM entregas e
+INNER JOIN atividades atv ON atv.id_atividade = e.id_atividade
+INNER JOIN atribuicoes a ON a.id_atribuicao = atv.id_atribuicao
+WHERE e.id_entrega = ?
+  AND a.id_docente = ?
+LIMIT 1
+";
+$stmt = $conn->prepare($sqlCheck);
+if (!$stmt) { echo "<p>Erro interno.</p>"; exit(); }
 
-$sql = "UPDATE entregas
-        SET status = ?, feedback = ?, nota = ?, avaliado_por = ?, avaliado_em = NOW()
-        WHERE id_entrega = ?";
-
-$stmt = $conn->prepare($sql);
-if (!$stmt) {
-    echo "<p>Erro ao preparar avaliação.</p>";
-    exit();
-}
-
-// nota pode ser NULL: truque -> usar variável e bind como double, mas quando NULL: setar como null e usar 'd' não funciona bem.
-// Solução simples: se nota for null, fazemos 2 queries.
+$stmt->bind_param("ii", $id_entrega, $idDocente);
+$stmt->execute();
+$res = $stmt->get_result();
+$ok = ($res && $res->num_rows > 0);
 $stmt->close();
 
-if ($nota === null) {
-    $sql2 = "UPDATE entregas
-            SET status = ?, feedback = ?, nota = NULL, avaliado_por = ?, avaliado_em = NOW()
-            WHERE id_entrega = ?";
-    $stmt2 = $conn->prepare($sql2);
-    if (!$stmt2) { echo "<p>Erro ao avaliar.</p>"; exit(); }
-    $stmt2->bind_param("ssii", $status, $feedback, $avaliado_por, $id_entrega);
-    $stmt2->execute();
-    $stmt2->close();
-} else {
-    $sql3 = "UPDATE entregas
-            SET status = ?, feedback = ?, nota = ?, avaliado_por = ?, avaliado_em = NOW()
-            WHERE id_entrega = ?";
-    $stmt3 = $conn->prepare($sql3);
-    if (!$stmt3) { echo "<p>Erro ao avaliar.</p>"; exit(); }
-    $stmt3->bind_param("ssdii", $status, $feedback, $nota, $avaliado_por, $id_entrega);
-    $stmt3->execute();
-    $stmt3->close();
+if (!$ok) {
+  http_response_code(403);
+  echo "<p>Operação não autorizada.</p>";
+  exit();
 }
 
-// Log
+/**
+ * Atualiza avaliação
+ */
+$stmt2 = $conn->prepare("UPDATE entregas SET nota = ?, feedback = ?, status = ? WHERE id_entrega = ?");
+if (!$stmt2) { echo "<p>Erro ao atualizar.</p>"; exit(); }
+
+$stmt2->bind_param("dssi", $nota, $feedback, $status, $id_entrega);
+$stmt2->execute();
+$stmt2->close();
+
+/**
+ * Log
+ */
 $data_hora = date('Y-m-d H:i:s');
-$descLog = "Avaliou uma entrega (#$id_entrega) -> $status";
-
-$sqlLog = "INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade) VALUES (?, ?, ?, 'Registro')";
-$stmtLog = $conn->prepare($sqlLog);
+$descricao = "Submissão avaliada (Entrega:$id_entrega, Nota:$nota)";
+$stmtLog = $conn->prepare("INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade) VALUES (?, ?, ?, 'Submissao')");
 if ($stmtLog) {
-    $stmtLog->bind_param("iss", $avaliado_por, $data_hora, $descLog);
-    $stmtLog->execute();
-    $stmtLog->close();
+  $stmtLog->bind_param("iss", $idDocente, $data_hora, $descricao);
+  $stmtLog->execute();
+  $stmtLog->close();
 }
 
-header("Location: ../pages/funcionario/entregas.php");
+header("Location: ../pages/docente/entregas.php");
 exit();

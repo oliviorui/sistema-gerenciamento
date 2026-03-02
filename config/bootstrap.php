@@ -1,8 +1,8 @@
 <?php
-// config/bootstrap.php
 declare(strict_types=1);
 
 require_once __DIR__ . '/conexao.php';
+require_once __DIR__ . '/acl.php';
 
 /**
  * Sessão mais segura (cookie httponly + samesite)
@@ -38,31 +38,25 @@ function csrf_get_token(): string
         $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
 
-    return $_SESSION['csrf_token'];
-}
-
-function csrf_field(): string
-{
-    $token = csrf_get_token();
-    return '<input type="hidden" name="csrf_token" value="' . htmlspecialchars($token, ENT_QUOTES, 'UTF-8') . '">';
+    return (string)$_SESSION['csrf_token'];
 }
 
 function csrf_verify_or_exit(): void
 {
     start_secure_session();
 
-    $sent = $_POST['csrf_token'] ?? '';
-    $ok = is_string($sent) && isset($_SESSION['csrf_token']) && hash_equals((string)$_SESSION['csrf_token'], $sent);
+    $token = (string)($_POST['csrf_token'] ?? '');
+    $sessionToken = (string)($_SESSION['csrf_token'] ?? '');
 
-    if (!$ok) {
+    if ($token === '' || $sessionToken === '' || !hash_equals($sessionToken, $token)) {
         http_response_code(403);
-        echo "Ação bloqueada (CSRF inválido).";
+        echo "<p>Falha de validação CSRF.</p>";
         exit();
     }
 }
 
 /**
- * Remember-me token (cookie + DB)
+ * Remember-me cookie
  */
 function remember_cookie_set(string $token, int $days = 30): void
 {
@@ -93,17 +87,29 @@ function remember_cookie_clear(): void
     ]);
 }
 
+/**
+ * Login helpers
+ */
 function login_set_session(array $usuario): void
 {
     start_secure_session();
-    session_regenerate_id(true);
 
-    $_SESSION['usuario_id'] = (int)$usuario['id_usuario'];
-    $_SESSION['usuario_nome'] = (string)$usuario['nome'];
-    $_SESSION['usuario_tipo'] = (string)$usuario['tipo'];
+    $_SESSION['usuario_id'] = (int)($usuario['id_usuario'] ?? 0);
+    $_SESSION['usuario_nome'] = (string)($usuario['nome'] ?? '');
+    $_SESSION['usuario_email'] = (string)($usuario['email'] ?? '');
+    $_SESSION['usuario_tipo'] = (string)($usuario['tipo'] ?? 'estudante');
 }
 
-function try_auto_login_by_remember_token(mysqli $conn): void
+function is_logged_in(): bool
+{
+    start_secure_session();
+    return !empty($_SESSION['usuario_id']);
+}
+
+/**
+ * Auto-login por remember token (se existir) + sessão normal
+ */
+function require_login(mysqli $conn): void
 {
     start_secure_session();
 
@@ -111,15 +117,16 @@ function try_auto_login_by_remember_token(mysqli $conn): void
         return;
     }
 
-    $cookieToken = $_COOKIE['remember_token'] ?? '';
-    if (!is_string($cookieToken) || $cookieToken === '') {
-        return;
+    $cookieToken = (string)($_COOKIE['remember_token'] ?? '');
+    if ($cookieToken === '') {
+        header('Location: ../auth/login.php');
+        exit();
     }
 
     $tokenHash = hash('sha256', $cookieToken);
 
     $sql = "
-        SELECT u.id_usuario, u.nome, u.tipo
+        SELECT u.id_usuario, u.nome, u.email, u.tipo
         FROM user_tokens t
         INNER JOIN usuarios u ON u.id_usuario = t.id_usuario
         WHERE t.token_hash = ?
@@ -129,45 +136,51 @@ function try_auto_login_by_remember_token(mysqli $conn): void
 
     $stmt = $conn->prepare($sql);
     if (!$stmt) {
-        return;
+        header('Location: ../auth/login.php');
+        exit();
     }
 
     $stmt->bind_param("s", $tokenHash);
     $stmt->execute();
     $res = $stmt->get_result();
-
-    if ($res && $res->num_rows === 1) {
-        $usuario = $res->fetch_assoc();
-        if (is_array($usuario)) {
-            login_set_session($usuario);
-        }
-    }
-
+    $usuario = $res ? $res->fetch_assoc() : null;
     $stmt->close();
-}
 
-function require_login(mysqli $conn): void
-{
-    start_secure_session();
-    try_auto_login_by_remember_token($conn);
-
-    if (empty($_SESSION['usuario_id'])) {
-        header("Location: ../auth/login.php");
+    if (!$usuario) {
+        remember_cookie_clear();
+        header('Location: ../auth/login.php');
         exit();
     }
+
+    // Compatibilidade: migra tipos antigos
+    if (($usuario['tipo'] ?? '') === 'funcionario') {
+        $usuario['tipo'] = 'docente';
+    }
+    if (($usuario['tipo'] ?? '') === 'usuario') {
+        $usuario['tipo'] = 'estudante';
+    }
+
+    login_set_session($usuario);
 }
 
 /**
- * Roles
+ * Autorização por perfis
  */
 function require_role(mysqli $conn, array $allowedRoles): void
 {
     require_login($conn);
 
-    $tipo = (string)($_SESSION['usuario_tipo'] ?? '');
+    $tipo = (string)($_SESSION['usuario_tipo'] ?? 'estudante');
+
+    // compat de dados antigos
+    if ($tipo === 'funcionario') {
+        $tipo = 'docente';
+        $_SESSION['usuario_tipo'] = 'docente';
+    }
+
     if (!in_array($tipo, $allowedRoles, true)) {
         http_response_code(403);
-        echo "Sem permissão.";
+        echo "<p>Acesso negado.</p>";
         exit();
     }
 }
@@ -177,7 +190,13 @@ function require_admin(mysqli $conn): void
     require_role($conn, ['admin']);
 }
 
+function require_docente_or_admin(mysqli $conn): void
+{
+    require_role($conn, ['docente', 'admin']);
+}
+
+// Backward-compat: caso ainda existam páginas antigas
 function require_funcionario_or_admin(mysqli $conn): void
 {
-    require_role($conn, ['funcionario', 'admin']);
+    require_docente_or_admin($conn);
 }

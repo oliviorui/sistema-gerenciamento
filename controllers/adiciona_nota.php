@@ -1,23 +1,26 @@
 <?php
 require_once '../config/bootstrap.php';
 
-require_funcionario_or_admin($conn);
+require_docente_or_admin($conn);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: ../pages/logged/dashboard.php');
+    header('Location: ../pages/docente/dashboard_docente.php');
     exit();
 }
 
 csrf_verify_or_exit();
 
-$id_usuario_alvo = (int)($_POST['id_usuario_alvo'] ?? 0); // aluno
-$id_disciplina = (int)($_POST['disciplina'] ?? 0);
-$notaRaw = (string)($_POST['nota'] ?? '');
-$tipo_avaliacao = trim((string)($_POST['tipo_avaliacao'] ?? ''));
-$data_avaliacao = trim((string)($_POST['data_avaliacao'] ?? ''));
+$idDocente = (int)($_SESSION['usuario_id'] ?? 0);
 
-if ($id_usuario_alvo <= 0 || $id_disciplina <= 0 || $notaRaw === '' || $tipo_avaliacao === '') {
-    echo "<p>Preencha todos os campos obrigatórios.</p>";
+$idAtribuicao = (int)($_POST['id_atribuicao'] ?? 0);
+$idEstudante = (int)($_POST['id_estudante'] ?? 0);
+
+$tipoAvaliacao = trim((string)($_POST['tipo_avaliacao'] ?? ''));
+$notaRaw = (string)($_POST['nota'] ?? '');
+$dataAvaliacao = trim((string)($_POST['data_avaliacao'] ?? ''));
+
+if ($idAtribuicao <= 0 || $idEstudante <= 0 || $tipoAvaliacao === '' || $notaRaw === '') {
+    echo "<p>Preencha os campos obrigatórios.</p>";
     exit();
 }
 
@@ -27,86 +30,63 @@ if ($nota < 0 || $nota > 20) {
     exit();
 }
 
-if ($data_avaliacao === '') {
-    $data_avaliacao = date('Y-m-d');
-}
+/**
+ * Buscar turma+disciplina da atribuição, mas só se pertencer ao docente logado
+ */
+$sql = "SELECT id_turma, id_disciplina FROM atribuicoes WHERE id_atribuicao = ? AND id_docente = ? LIMIT 1";
+$stmt = $conn->prepare($sql);
+if (!$stmt) { echo "<p>Erro interno.</p>"; exit(); }
 
-// Verificar se aluno existe e é estudante
-$sqlAluno = "SELECT nome, tipo FROM usuarios WHERE id_usuario = ? LIMIT 1";
-$stmtAluno = $conn->prepare($sqlAluno);
+$stmt->bind_param("ii", $idAtribuicao, $idDocente);
+$stmt->execute();
+$res = $stmt->get_result();
+$atr = $res ? $res->fetch_assoc() : null;
+$stmt->close();
 
-$nomeAluno = null;
-$tipoAluno = null;
-
-if ($stmtAluno) {
-    $stmtAluno->bind_param("i", $id_usuario_alvo);
-    $stmtAluno->execute();
-    $resAluno = $stmtAluno->get_result();
-    if ($resAluno && $resAluno->num_rows === 1) {
-        $row = $resAluno->fetch_assoc();
-        if (is_array($row)) {
-            $nomeAluno = (string)($row['nome'] ?? '');
-            $tipoAluno = (string)($row['tipo'] ?? '');
-        }
-    }
-    $stmtAluno->close();
-}
-
-if ($nomeAluno === null || $tipoAluno !== 'estudante') {
-    echo "<p>Selecione um estudante válido.</p>";
+if (!$atr) {
+    http_response_code(403);
+    echo "<p>Operação não autorizada (atribuição inválida).</p>";
     exit();
 }
 
-// Nome da disciplina
-$sqlDisc = "SELECT nome FROM disciplinas WHERE id_disciplina = ? LIMIT 1";
-$stmtDisc = $conn->prepare($sqlDisc);
+$idTurma = (int)$atr['id_turma'];
+$idDisciplina = (int)$atr['id_disciplina'];
 
-$nomeDisciplina = null;
-
-if ($stmtDisc) {
-    $stmtDisc->bind_param("i", $id_disciplina);
-    $stmtDisc->execute();
-    $resDisc = $stmtDisc->get_result();
-    if ($resDisc && $resDisc->num_rows === 1) {
-        $row = $resDisc->fetch_assoc();
-        if (is_array($row) && isset($row['nome'])) {
-            $nomeDisciplina = (string)$row['nome'];
-        }
-    }
-    $stmtDisc->close();
-}
-
-if ($nomeDisciplina === null) {
-    echo "<p>Disciplina inválida.</p>";
+/**
+ * Validar se estudante pertence à mesma turma da atribuição
+ */
+$idTurmaEst = buscar_turma_do_estudante($conn, $idEstudante);
+if ($idTurmaEst === null || $idTurmaEst !== $idTurma) {
+    http_response_code(403);
+    echo "<p>Operação não autorizada (estudante fora da turma).</p>";
     exit();
 }
 
-// Inserir nota
-$sqlIns = "INSERT INTO notas (id_usuario, id_disciplina, nota, data_avaliacao, tipo_avaliacao) VALUES (?, ?, ?, ?, ?)";
-$stmtIns = $conn->prepare($sqlIns);
+/**
+ * Inserir nota
+ */
+$sqlIns = "
+INSERT INTO notas (id_docente, id_estudante, id_disciplina, tipo_avaliacao, nota, data_avaliacao)
+VALUES (?, ?, ?, ?, ?, ?)
+";
+$stmt2 = $conn->prepare($sqlIns);
+if (!$stmt2) { echo "<p>Erro ao registar nota.</p>"; exit(); }
 
-if (!$stmtIns) {
-    echo "<p>Erro ao preparar inserção.</p>";
-    exit();
-}
+$stmt2->bind_param("iiisds", $idDocente, $idEstudante, $idDisciplina, $tipoAvaliacao, $nota, $dataAvaliacao);
+$stmt2->execute();
+$stmt2->close();
 
-$stmtIns->bind_param("iidss", $id_usuario_alvo, $id_disciplina, $nota, $data_avaliacao, $tipo_avaliacao);
-$stmtIns->execute();
-$stmtIns->close();
-
-// Log (quem registrou)
-$id_quem_registrou = (int)($_SESSION['usuario_id'] ?? 0);
+/**
+ * Log
+ */
 $data_hora = date('Y-m-d H:i:s');
-$descricao = "Lançou nota para $nomeAluno em $nomeDisciplina";
-
-$sqlLog = "INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade) VALUES (?, ?, ?, 'Registro')";
-$stmtLog = $conn->prepare($sqlLog);
-
+$descricao = "Nota registada (Docente:$idDocente, Estudante:$idEstudante, Disciplina:$idDisciplina)";
+$stmtLog = $conn->prepare("INSERT INTO logs_atividades (id_usuario, data_hora, descricao, tipo_actividade) VALUES (?, ?, ?, 'Nota')");
 if ($stmtLog) {
-    $stmtLog->bind_param("iss", $id_quem_registrou, $data_hora, $descricao);
+    $stmtLog->bind_param("iss", $idDocente, $data_hora, $descricao);
     $stmtLog->execute();
     $stmtLog->close();
 }
 
-header('Location: ../pages/funcionario/dashboard_funcionario.php');
+header('Location: ../pages/docente/dashboard_docente.php');
 exit();

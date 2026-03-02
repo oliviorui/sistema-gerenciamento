@@ -42,9 +42,12 @@ if (!is_array($usuario) || !password_verify($senha, (string)$usuario['senha'])) 
     exit();
 }
 
-// Compatibilidade: se ainda existir 'usuario', converte na sessão para estudante
+// Compatibilidade: migra tipos antigos para os actuais
 if (($usuario['tipo'] ?? '') === 'usuario') {
     $usuario['tipo'] = 'estudante';
+}
+if (($usuario['tipo'] ?? '') === 'funcionario') {
+    $usuario['tipo'] = 'docente';
 }
 
 login_set_session($usuario);
@@ -87,10 +90,10 @@ if ($tipo === 'admin') {
     exit();
 }
 
-if ($tipo === 'funcionario') {
-    header('Location: ../pages/funcionario/dashboard_funcionario.php');
+if ($tipo === 'docente') {
+    header('Location: ../pages/docente/dashboard_docente.php');
     exit();
 }
 
-header('Location: ../pages/logged/dashboard.php');
+header('Location: ../pages/estudante/dashboard.php');
 exit();
