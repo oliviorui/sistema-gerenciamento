@@ -125,18 +125,6 @@ http://localhost/sistema-gerenciamento
 
 ---
 
-## 🔐 Visibilidade do Repositório
-
-**Status recomendado:** 🔓 **Público**
-
-**Motivos:**
-- Não contém variáveis sensíveis expostas
-- Credenciais podem ser facilmente genéricas
-- Demonstra autenticação, dashboard e integração com BD
-- Excelente projeto para portfólio
-
----
-
 ## 📄 Licença
 
 Este projeto está licenciado sob a licença **MIT**.
